@@ -1,0 +1,33 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates S3 resources for supporting Chef at Randall IT
+
+Parameters:
+
+  ChefBucketName:
+    Type: String
+    Default: randall-it-chef
+    Description: Name to use for the source bucket
+
+Resources:
+
+  # Bucket that contains files needed for chef-client files
+  ChefBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ChefBucketName
+      Tags:
+        - Key: Name
+          Value: !Ref ChefBucketName
+        - Key: System
+          Value: Chef
+      VersioningConfiguration:
+        Status: Enabled
+
+Outputs:
+
+  ChefBucketName:
+    Description: Name of the bucket that contains chef-client related files
+    Value: !Ref ChefBucket
+    Export:
+      Name: chef-bucket
