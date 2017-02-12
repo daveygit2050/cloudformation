@@ -4,6 +4,11 @@ Description: Creates a self-healing Bamboo server using Chef
 
 Parameters:
 
+  FQDN:
+    Type: String
+    Default: bamboo.randall-it.uk
+    Description: DNS name to create for the Bamboo server
+
   ImageId:
     Type: String
     Description: ImageId to use for the Bamboo server
@@ -12,6 +17,11 @@ Parameters:
     Type: String
     Default: t2.small
     Description: InstanceType to use for the Bamboo server
+
+  HostedZoneId:
+    Type: String
+    Default: Z35V1WYGMHE3VE
+    Description: Route 53 hosted zone in which the Bamboo server will create a record
 
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
@@ -52,11 +62,21 @@ Resources:
       UserData:
         Fn::Base64: !Join
           - "\n"
-          - - "yum install epel-release"
-            - "yum install python27"
-            - "yum install python-pip"
+          - - "yum install -y epel-release"
+            - "yum install -y python-pip wget rubygems"
             - "pip install awscli"
-            - !Join ["", ["aws s3 cp s3://", !ImportValue "chef-bucket", "/validator.pem ~/validator.pem"]]
+            - "wget https://packages.chef.io/files/stable/chef/12.18.31/el/7/chef-12.18.31-1.el7.x86_64.rpm"
+            - "rpm -Uvh chef-12.18.31-1.el7.x86_64.rpm"
+            - !Join ["", ["aws s3 cp s3://", !ImportValue "chef-bucket", "/validator.pem ~"]]
+            - !Join ["", ["aws s3 cp s3://", !ImportValue "chef-bucket", "/client.rb ~"]]
+            - !Join ["", ["aws s3 cp s3://", !ImportValue "chef-bucket", "/bamboo-record.json ~"]]
+            - "echo '{\"run_list\": [\"role[bamboo]\"]}' > /etc/chef/first-boot.json"
+            - "chef-client -j /etc/chef/first-boot.pem"
+            - "PUBLIC_IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)"
+            - !Join ["", ["sed -i -e \"s/FQDN-HERE/", !Ref FQDN, "/g\" ~/bamboo-record.json"]]
+            - "sed -i -e \"s/IP-ADDRESS-HERE/$PUBLIC_IP/g\" ~/bamboo-record.json"
+            - !Join ["", ["aws route53 change-resource-record-sets --hosted-zone-id ", !Ref HostedZoneId, " --change-batch file://~/bamboo-record.json"]]
+            - "rm ~/* -f"
 
   # Instance profile allows the instances to assume a role
   InstanceProfile:
@@ -93,6 +113,12 @@ Resources:
                 Effect: Allow
                 Resource: !Join ["", ["arn:aws:s3:::", !ImportValue "chef-bucket", "/*"]]
           PolicyName: chef-bucket-contents
+        - PolicyDocument:
+            Statement:
+              - Action: route53:ChangeResourceRecordSets
+                Effect: Allow
+                Resource: !Join ["", ["arn:aws:route53:::hostedzone/", !Ref HostedZoneId]]
+          PolicyName: route53-record
 
   # A security group that allows access to the Bamboo server over port 8085 from a specific IP
   SecurityGroup:
