@@ -1,0 +1,44 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates some resources for Simiam Army to manage
+
+Parameters:
+
+  ImageId:
+    Type: String
+    Default: ami-7abd0209
+    Description: ImageId to use for the instances
+
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: InstanceType to use for the instances
+
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: A list of subnets in which to deploy the intances
+
+Resources:
+
+  # Launch configuration defines the instance properties
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            DeleteOnTermination: True
+            VolumeSize: 8
+            VolumeType: standard
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+
+  # An autoscaling group which will launch the desired number instances
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: 1
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MaxSize: 1
+      MinSize: 1
+      VPCZoneIdentifier: !Ref SubnetIds
